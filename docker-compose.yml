@@ -1,0 +1,85 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL 15 ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: hr_erp_postgres
+    environment:
+      POSTGRES_DB: hic_central
+      POSTGRES_USER: hic_user
+      POSTGRES_PASSWORD: hic_password
+      # Also create a superuser for pgAdmin convenience
+      POSTGRES_HOST_AUTH_METHOD: md5
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hic_user -d hic_central"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hr_erp_network
+
+  # ── pgAdmin 4 ────────────────────────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: hr_erp_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@pgadmin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - hr_erp_network
+
+  # ── Spring Boot Backend ───────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: hr_erp_backend
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/hic_central
+      SPRING_DATASOURCE_USERNAME: hic_user
+      SPRING_DATASOURCE_PASSWORD: hic_password
+      SPRING_FLYWAY_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backend_logs:/app/logs
+    networks:
+      - hr_erp_network
+
+  # ── React Frontend (Nginx) ────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hr_erp_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - hr_erp_network
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  pgadmin_data:
+  backend_logs:
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  hr_erp_network:
+    driver: bridge
