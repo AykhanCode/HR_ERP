@@ -189,20 +189,14 @@ export default function EmployeesPage() {
           }
         }
       } else {
-        await createEmployee(payload)
-        if (photoFile) {
-          const currentEmployees = useEmployeeStore.getState().employees
-          const newEmp = currentEmployees.find(
-            e => e.firstName === form.firstName && e.lastName === form.lastName
-          )
-          if (newEmp) {
-            setUploadingPhoto(true)
-            try {
-              await employeeApi.uploadPhoto(newEmp.id, photoFile)
-              applyFilters(currentPage)
-            } finally {
-              setUploadingPhoto(false)
-            }
+        const newEmp = await createEmployee(payload)
+        if (photoFile && newEmp?.id) {
+          setUploadingPhoto(true)
+          try {
+            await employeeApi.uploadPhoto(newEmp.id, photoFile)
+            applyFilters(currentPage)
+          } finally {
+            setUploadingPhoto(false)
           }
         }
       }
@@ -236,7 +230,7 @@ export default function EmployeesPage() {
   const getPhotoSrc = (emp: Employee) => {
     if (!emp.photoUrl) return null
     if (emp.photoUrl.startsWith('http')) return emp.photoUrl
-    const base = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') ?? 'http://localhost:8080'
+    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
     return `${base}${emp.photoUrl}`
   }
 

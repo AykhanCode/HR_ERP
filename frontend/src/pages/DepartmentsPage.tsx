@@ -125,19 +125,11 @@ export default function DepartmentsPage() {
 
   const toggleAssign = async (emp: Employee) => {
     if (!assignDept) return
+    // Only allow assigning to this department; to unassign, use the employee edit form
+    if (isAssigned(emp.id)) return
     try {
-      if (isAssigned(emp.id)) {
-        // Unassign: set departmentId to null (we pass a PUT with departmentId cleared)
-        // Since we can't set null via standard update, we use a placeholder (0) to signal "no dept"
-        // Instead, the backend expects a valid department or we should handle this gracefully
-        // For now, we'll update the employee to remove dept assignment by sending departmentId as undefined
-        // The API requires departmentId (not null), so this is a best-effort UI toggle
-        // We remove from local state to show toggle feedback
-        setDeptEmployees(prev => prev.filter(e => e.id !== emp.id))
-      } else {
-        await employeeApi.update(emp.id, { ...emp, departmentId: assignDept.id })
-        setDeptEmployees(prev => [...prev, { ...emp, departmentId: assignDept.id }])
-      }
+      await employeeApi.update(emp.id, { ...emp, departmentId: assignDept.id })
+      setDeptEmployees(prev => [...prev, { ...emp, departmentId: assignDept.id }])
       await fetchDepartments()
     } catch {
       // ignore
@@ -376,8 +368,9 @@ export default function DepartmentsPage() {
                 return (
                   <div
                     key={emp.id}
-                    className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => toggleAssign(emp)}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-colors ${assigned ? 'bg-purple-50 cursor-default' : 'hover:bg-gray-50 cursor-pointer'}`}
+                    onClick={() => !assigned && toggleAssign(emp)}
+                    title={assigned ? 'Departamentdən çıxarmaq üçün əməkdaş redaktəsindən istifadə edin' : undefined}
                   >
                     <div className="flex items-center gap-3">
                       <div

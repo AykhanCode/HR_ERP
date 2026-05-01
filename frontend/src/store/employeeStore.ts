@@ -11,7 +11,7 @@ interface EmployeeState {
   error: string | null
   fetchEmployees: (page?: number, size?: number) => Promise<void>
   filterEmployees: (params: EmployeeFilterParams) => Promise<void>
-  createEmployee: (data: Partial<Employee>) => Promise<void>
+  createEmployee: (data: Partial<Employee>) => Promise<Employee>
   updateEmployee: (id: number, data: Partial<Employee>) => Promise<void>
   deleteEmployee: (id: number) => Promise<void>
 }
@@ -56,8 +56,9 @@ export const useEmployeeStore = create<EmployeeState>((set, get) => ({
     }
   },
   createEmployee: async (data) => {
-    await employeeApi.create(data)
+    const res = await employeeApi.create(data)
     await get().fetchEmployees(get().currentPage)
+    return res.data.data
   },
   updateEmployee: async (id, data) => {
     await employeeApi.update(id, data)
