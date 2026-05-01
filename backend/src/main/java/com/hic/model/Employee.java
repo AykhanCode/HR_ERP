@@ -70,6 +70,9 @@ public class Employee {
     @Column(name = "shift_type")
     private String shiftType;
 
+    @Column(name = "photo_url")
+    private String photoUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "employment_status", nullable = false)
     private EmploymentStatus employmentStatus = EmploymentStatus.ACTIVE;

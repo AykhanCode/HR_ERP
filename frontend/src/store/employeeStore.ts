@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { Employee, PaginatedResponse } from '../types'
-import { employeeApi } from '../api/employeeApi'
+import { employeeApi, EmployeeFilterParams } from '../api/employeeApi'
 
 interface EmployeeState {
   employees: Employee[]
@@ -10,7 +10,8 @@ interface EmployeeState {
   loading: boolean
   error: string | null
   fetchEmployees: (page?: number, size?: number) => Promise<void>
-  createEmployee: (data: Partial<Employee>) => Promise<void>
+  filterEmployees: (params: EmployeeFilterParams) => Promise<void>
+  createEmployee: (data: Partial<Employee>) => Promise<Employee>
   updateEmployee: (id: number, data: Partial<Employee>) => Promise<void>
   deleteEmployee: (id: number) => Promise<void>
 }
@@ -38,9 +39,26 @@ export const useEmployeeStore = create<EmployeeState>((set, get) => ({
       set({ error: (e as Error).message, loading: false })
     }
   },
+  filterEmployees: async (params: EmployeeFilterParams) => {
+    set({ loading: true, error: null })
+    try {
+      const res = await employeeApi.filter(params)
+      const data: PaginatedResponse<Employee> = res.data
+      set({
+        employees: data.content,
+        totalElements: data.totalElements,
+        totalPages: data.totalPages,
+        currentPage: data.currentPage,
+        loading: false,
+      })
+    } catch (e: unknown) {
+      set({ error: (e as Error).message, loading: false })
+    }
+  },
   createEmployee: async (data) => {
-    await employeeApi.create(data)
+    const res = await employeeApi.create(data)
     await get().fetchEmployees(get().currentPage)
+    return res.data.data
   },
   updateEmployee: async (id, data) => {
     await employeeApi.update(id, data)

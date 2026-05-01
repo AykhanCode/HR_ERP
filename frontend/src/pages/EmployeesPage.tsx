@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Layout from '../components/Layout'
 import { useEmployeeStore } from '../store/employeeStore'
 import { Employee, Department, Position } from '../types'
 import { departmentApi } from '../api/departmentApi'
 import { positionApi } from '../api/positionApi'
+import { employeeApi } from '../api/employeeApi'
 
 interface EmployeeFormData {
   firstName: string
@@ -46,7 +47,7 @@ function getAvatarColor(name: string) {
 }
 
 export default function EmployeesPage() {
-  const { employees, loading, error, fetchEmployees, createEmployee, updateEmployee, deleteEmployee, totalPages, currentPage, totalElements } = useEmployeeStore()
+  const { employees, loading, error, fetchEmployees, filterEmployees, createEmployee, updateEmployee, deleteEmployee, totalPages, currentPage, totalElements } = useEmployeeStore()
   const [search, setSearch] = useState('')
   const [departments, setDepartments] = useState<Department[]>([])
   const [positions, setPositions] = useState<Position[]>([])
@@ -60,6 +61,36 @@ export default function EmployeesPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Employee | null>(null)
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const uniqueAreas = Array.from(new Set(employees.map(e => e.area).filter(Boolean))) as string[]
+  const uniqueShifts = Array.from(new Set(employees.map(e => e.shiftType).filter(Boolean))) as string[]
+
+  const activeCount = employees.filter(e => e.employmentStatus === 'ACTIVE').length
+  const onLeaveCount = employees.filter(e => e.employmentStatus === 'ON_LEAVE').length
+
+  const applyFilters = useCallback((page = 0, searchOverride?: string) => {
+    const s = searchOverride !== undefined ? searchOverride : search
+    const hasFilters = s || filterDept || filterStatus || filterShift || filterArea
+    if (hasFilters) {
+      filterEmployees({
+        search: s || undefined,
+        department: filterDept || undefined,
+        status: filterStatus || undefined,
+        shift: filterShift || undefined,
+        area: filterArea || undefined,
+        page,
+        size: 20,
+      })
+    } else {
+      fetchEmployees(page, 20)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filterDept, filterStatus, filterShift, filterArea])
 
   useEffect(() => {
     fetchEmployees(0, 20)
@@ -68,10 +99,31 @@ export default function EmployeesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    applyFilters(0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDept, filterStatus, filterShift, filterArea])
+
+  const handleSearchChange = (value: string) => {
+    setSearch(value)
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => {
+      applyFilters(0, value)
+    }, 400)
+  }
+
+  const clearSearch = () => {
+    setSearch('')
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    applyFilters(0, '')
+  }
+
   const openCreate = () => {
     setEditingEmployee(null)
     setForm(defaultForm)
     setFormError(null)
+    setPhotoFile(null)
+    setPhotoPreview(null)
     setShowModal(true)
   }
 
@@ -93,6 +145,8 @@ export default function EmployeesPage() {
       employmentStatus: emp.employmentStatus || 'ACTIVE',
     })
     setFormError(null)
+    setPhotoFile(null)
+    setPhotoPreview(emp.photoUrl ? getPhotoSrc(emp) : null)
     setShowModal(true)
   }
 
@@ -125,8 +179,26 @@ export default function EmployeesPage() {
       }
       if (editingEmployee) {
         await updateEmployee(editingEmployee.id, payload)
+        if (photoFile) {
+          setUploadingPhoto(true)
+          try {
+            await employeeApi.uploadPhoto(editingEmployee.id, photoFile)
+            applyFilters(currentPage)
+          } finally {
+            setUploadingPhoto(false)
+          }
+        }
       } else {
-        await createEmployee(payload)
+        const newEmp = await createEmployee(payload)
+        if (photoFile && newEmp?.id) {
+          setUploadingPhoto(true)
+          try {
+            await employeeApi.uploadPhoto(newEmp.id, photoFile)
+            applyFilters(currentPage)
+          } finally {
+            setUploadingPhoto(false)
+          }
+        }
       }
       setShowModal(false)
     } catch (e: unknown) {
@@ -146,26 +218,21 @@ export default function EmployeesPage() {
     }
   }
 
-  const handleSearch = () => {
-    if (!search.trim()) {
-      fetchEmployees(0, 20)
-    }
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPhotoFile(file)
+    const reader = new FileReader()
+    reader.onload = (ev) => setPhotoPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
   }
 
-  const filtered = employees.filter((e: Employee) => {
-    const matchSearch = !search || `${e.firstName} ${e.lastName}`.toLowerCase().includes(search.toLowerCase()) || e.employeeId.toLowerCase().includes(search.toLowerCase())
-    const matchDept = !filterDept || String(e.departmentId) === filterDept
-    const matchStatus = !filterStatus || e.employmentStatus === filterStatus
-    const matchShift = !filterShift || e.shiftType === filterShift
-    const matchArea = !filterArea || e.area === filterArea
-    return matchSearch && matchDept && matchStatus && matchShift && matchArea
-  })
-
-  const uniqueAreas = Array.from(new Set(employees.map(e => e.area).filter(Boolean))) as string[]
-  const uniqueShifts = Array.from(new Set(employees.map(e => e.shiftType).filter(Boolean))) as string[]
-
-  const activeCount = employees.filter(e => e.employmentStatus === 'ACTIVE').length
-  const onLeaveCount = employees.filter(e => e.employmentStatus === 'ON_LEAVE').length
+  const getPhotoSrc = (emp: Employee) => {
+    if (!emp.photoUrl) return null
+    if (emp.photoUrl.startsWith('http')) return emp.photoUrl
+    const base = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+    return `${base}${emp.photoUrl}`
+  }
 
   return (
     <Layout>
@@ -182,7 +249,7 @@ export default function EmployeesPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => fetchEmployees(currentPage, 20)}
+              onClick={() => applyFilters(currentPage)}
               className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,12 +280,11 @@ export default function EmployeesPage() {
               type="text"
               placeholder="Əməkdaş axtar..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="flex-1 outline-none text-sm text-gray-700 placeholder-gray-400"
             />
             {search && (
-              <button onClick={() => { setSearch(''); fetchEmployees(0, 20) }} className="text-gray-400 hover:text-gray-600">
+              <button onClick={clearSearch} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -240,7 +306,14 @@ export default function EmployeesPage() {
 
           <select value={filterShift} onChange={e => setFilterShift(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-purple-400">
             <option value="">Bütün növbələr</option>
-            {uniqueShifts.map(s => <option key={s} value={s}>{s}</option>)}
+            {uniqueShifts.length > 0
+              ? uniqueShifts.map(s => <option key={s} value={s}>{s}</option>)
+              : <>
+                  <option value="Day">Gündüz</option>
+                  <option value="Night">Gecə</option>
+                  <option value="Flexible">Çevik</option>
+                </>
+            }
           </select>
 
           <select value={filterArea} onChange={e => setFilterArea(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 focus:outline-none focus:ring-1 focus:ring-purple-400">
@@ -257,9 +330,9 @@ export default function EmployeesPage() {
           </div>
         ) : error ? (
           <div className="bg-white rounded-xl shadow-sm p-8 text-center text-red-500">{error}</div>
-        ) : filtered.length === 0 ? (
+        ) : employees.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-400">
-            {search ? 'Axtarışa uyğun əməkdaş tapılmadı.' : 'Hələ heç bir əməkdaş yoxdur.'}
+            {search || filterDept || filterStatus || filterShift || filterArea ? 'Filtrə uyğun əməkdaş tapılmadı.' : 'Hələ heç bir əməkdaş yoxdur.'}
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -278,10 +351,11 @@ export default function EmployeesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filtered.map((emp: Employee) => {
+                {employees.map((emp: Employee) => {
                   const name = `${emp.firstName} ${emp.lastName}`
                   const initials = `${emp.firstName.charAt(0)}${emp.lastName.charAt(0)}`.toUpperCase()
                   const avatarColor = getAvatarColor(name)
+                  const photoSrc = getPhotoSrc(emp)
                   return (
                     <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
@@ -307,9 +381,17 @@ export default function EmployeesPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: avatarColor }}>
-                          {initials}
-                        </div>
+                        {photoSrc ? (
+                          <img
+                            src={photoSrc}
+                            alt={name}
+                            className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: avatarColor }}>
+                            {initials}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3 font-mono text-xs text-gray-600">{emp.employeeId}</td>
                       <td className="px-4 py-3 font-semibold text-gray-800">{name}</td>
@@ -339,11 +421,11 @@ export default function EmployeesPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between">
-            <button onClick={() => fetchEmployees(currentPage - 1)} disabled={currentPage === 0} className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg disabled:opacity-50 hover:bg-gray-50">
+            <button onClick={() => applyFilters(currentPage - 1)} disabled={currentPage === 0} className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg disabled:opacity-50 hover:bg-gray-50">
               Əvvəlki
             </button>
             <span className="text-sm text-gray-500">Səhifə {currentPage + 1} / {totalPages}</span>
-            <button onClick={() => fetchEmployees(currentPage + 1)} disabled={currentPage >= totalPages - 1} className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg disabled:opacity-50 hover:bg-gray-50">
+            <button onClick={() => applyFilters(currentPage + 1)} disabled={currentPage >= totalPages - 1} className="px-4 py-2 text-sm border border-gray-300 bg-white rounded-lg disabled:opacity-50 hover:bg-gray-50">
               Növbəti
             </button>
           </div>
@@ -360,6 +442,51 @@ export default function EmployeesPage() {
             {formError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-sm">{formError}</div>
             )}
+
+            {/* Photo Upload */}
+            <div className="mb-4 flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center overflow-hidden cursor-pointer border-2 border-dashed border-gray-300 hover:border-purple-400 transition-colors flex-shrink-0"
+                style={!photoPreview ? { background: '#f3f4f6' } : undefined}
+                onClick={() => photoInputRef.current?.click()}
+                title="Şəkil yükləyin"
+              >
+                {photoPreview ? (
+                  <img src={photoPreview} alt="preview" className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                )}
+              </div>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors"
+                >
+                  {photoPreview ? 'Şəkli dəyişin' : 'Şəkil yükləyin'}
+                </button>
+                {photoFile && (
+                  <button
+                    type="button"
+                    onClick={() => { setPhotoFile(null); setPhotoPreview(editingEmployee?.photoUrl ? getPhotoSrc(editingEmployee) : null) }}
+                    className="ml-2 text-sm text-red-500 hover:text-red-700"
+                  >
+                    Ləğv et
+                  </button>
+                )}
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG, GIF (maks. 5MB)</p>
+              </div>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Ad *', key: 'firstName', type: 'text' },
@@ -423,8 +550,8 @@ export default function EmployeesPage() {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">Ləğv et</button>
-              <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50" style={{ background: '#a855f7' }}>
-                {saving ? 'Saxlanılır...' : editingEmployee ? 'Yenilə' : 'Yarat'}
+              <button onClick={handleSave} disabled={saving || uploadingPhoto} className="px-4 py-2 text-sm text-white rounded-lg disabled:opacity-50" style={{ background: '#a855f7' }}>
+                {saving || uploadingPhoto ? 'Saxlanılır...' : editingEmployee ? 'Yenilə' : 'Yarat'}
               </button>
             </div>
           </div>

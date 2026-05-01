@@ -20,7 +20,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -35,6 +37,7 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final PositionRepository positionRepository;
+    private final FileStorageService fileStorageService;
 
     public PaginatedResponse<EmployeeResponseDTO> getAll(int page, int size, String sortBy) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortBy != null ? sortBy : "id"));
@@ -87,6 +90,20 @@ public class EmployeeService {
         return buildPaginatedResponse(employeePage);
     }
 
+    public PaginatedResponse<EmployeeResponseDTO> filter(EmploymentStatus status, Long departmentId,
+                                                           String shiftType, String area, String search,
+                                                           int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("id"));
+        Long tenantId = TenantContext.getTenantId();
+        String searchTrimmed = (search != null && !search.isBlank()) ? search.trim() : null;
+        String shiftTrimmed = (shiftType != null && !shiftType.isBlank()) ? shiftType.trim() : null;
+        String areaTrimmed = (area != null && !area.isBlank()) ? area.trim() : null;
+        Page<Employee> employeePage = employeeRepository.findByCompositeFilter(
+                tenantId, status, departmentId, shiftTrimmed, areaTrimmed, searchTrimmed, pageable);
+        return buildPaginatedResponse(employeePage);
+    }
+
+
     @Transactional
     public EmployeeResponseDTO create(EmployeeDTO dto) {
         validateDepartmentExists(dto.getDepartmentId());
@@ -133,10 +150,25 @@ public class EmployeeService {
 
     @Transactional
     public void delete(Long id) {
-        if (!employeeRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Employee", id);
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee", id));
+        if (employee.getPhotoUrl() != null) {
+            fileStorageService.deletePhoto(employee.getPhotoUrl());
         }
         employeeRepository.deleteById(id);
+    }
+
+    @Transactional
+    public EmployeeResponseDTO updatePhoto(Long id, MultipartFile file) throws IOException {
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Employee", id));
+        if (employee.getPhotoUrl() != null) {
+            fileStorageService.deletePhoto(employee.getPhotoUrl());
+        }
+        String photoUrl = fileStorageService.storePhoto(file);
+        employee.setPhotoUrl(photoUrl);
+        Employee saved = employeeRepository.save(employee);
+        return toResponseDTO(saved);
     }
 
     private void mapDtoToEmployee(EmployeeDTO dto, Employee employee) {
@@ -185,6 +217,7 @@ public class EmployeeService {
         dto.setFatherName(employee.getFatherName());
         dto.setArea(employee.getArea());
         dto.setShiftType(employee.getShiftType());
+        dto.setPhotoUrl(employee.getPhotoUrl());
         dto.setEmploymentStatus(employee.getEmploymentStatus());
         dto.setCreatedAt(employee.getCreatedAt());
         dto.setUpdatedAt(employee.getUpdatedAt());

@@ -60,6 +60,24 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
                                   Pageable pageable);
 
     @Query("SELECT e FROM Employee e WHERE " +
+           "(:tenantId IS NULL OR e.tenantId = :tenantId) AND " +
+           "(:status IS NULL OR e.employmentStatus = :status) AND " +
+           "(:departmentId IS NULL OR e.departmentId = :departmentId) AND " +
+           "(:shiftType IS NULL OR e.shiftType = :shiftType) AND " +
+           "(:area IS NULL OR e.area = :area) AND " +
+           "(:search IS NULL OR :search = '' OR " +
+           " LOWER(e.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           " LOWER(e.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           " LOWER(e.employeeId) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Employee> findByCompositeFilter(@Param("tenantId") Long tenantId,
+                                          @Param("status") EmploymentStatus status,
+                                          @Param("departmentId") Long departmentId,
+                                          @Param("shiftType") String shiftType,
+                                          @Param("area") String area,
+                                          @Param("search") String search,
+                                          Pageable pageable);
+
+    @Query("SELECT e FROM Employee e WHERE " +
            "LOWER(e.firstName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(e.lastName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(e.employeeId) LIKE LOWER(CONCAT('%', :query, '%')) OR " +

@@ -6,11 +6,14 @@ import com.hic.dto.PaginatedResponse;
 import com.hic.dto.ApiResponse;
 import com.hic.model.Employee.EmploymentStatus;
 import com.hic.service.EmployeeService;
+import com.hic.service.FileStorageService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -18,6 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmployeeController {
     private final EmployeeService employeeService;
+    private final FileStorageService fileStorageService;
 
     @GetMapping
     public ResponseEntity<PaginatedResponse<EmployeeResponseDTO>> getAll(
@@ -58,6 +62,18 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.search(q, page, size));
     }
 
+    @GetMapping("/filter")
+    public ResponseEntity<PaginatedResponse<EmployeeResponseDTO>> filter(
+            @RequestParam(required = false) EmploymentStatus status,
+            @RequestParam(required = false) Long department,
+            @RequestParam(required = false) String shift,
+            @RequestParam(required = false) String area,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(employeeService.filter(status, department, shift, area, search, page, size));
+    }
+
     @PostMapping
     public ResponseEntity<ApiResponse<EmployeeResponseDTO>> create(@Valid @RequestBody EmployeeDTO dto) {
         return ResponseEntity.ok(ApiResponse.success(employeeService.create(dto)));
@@ -72,5 +88,13 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         employeeService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    @PostMapping("/{id}/upload-photo")
+    public ResponseEntity<ApiResponse<EmployeeResponseDTO>> uploadPhoto(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        EmployeeResponseDTO updated = employeeService.updatePhoto(id, file);
+        return ResponseEntity.ok(ApiResponse.success(updated));
     }
 }
