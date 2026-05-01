@@ -41,6 +41,9 @@ class EmployeeServiceTest {
     @Mock
     private PositionRepository positionRepository;
 
+    @Mock
+    private FileStorageService fileStorageService;
+
     @InjectMocks
     private EmployeeService employeeService;
 
@@ -145,7 +148,7 @@ class EmployeeServiceTest {
 
     @Test
     void delete_existingEmployee_deletesSuccessfully() {
-        when(employeeRepository.existsById(1L)).thenReturn(true);
+        when(employeeRepository.findById(1L)).thenReturn(Optional.of(testEmployee));
 
         employeeService.delete(1L);
 
@@ -154,7 +157,7 @@ class EmployeeServiceTest {
 
     @Test
     void delete_nonExistentEmployee_throwsResourceNotFoundException() {
-        when(employeeRepository.existsById(99L)).thenReturn(false);
+        when(employeeRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> employeeService.delete(99L))
                 .isInstanceOf(ResourceNotFoundException.class);

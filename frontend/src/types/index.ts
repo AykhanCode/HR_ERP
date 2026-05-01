@@ -54,6 +54,7 @@ export interface Employee {
   hireDate?: string
   area?: string
   shiftType?: string
+  photoUrl?: string
   employmentStatus: 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE'
   createdAt?: string
   updatedAt?: string

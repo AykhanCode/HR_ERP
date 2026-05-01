@@ -27,6 +27,7 @@ public class EmployeeResponseDTO {
     private String fatherName;
     private String area;
     private String shiftType;
+    private String photoUrl;
     private EmploymentStatus employmentStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

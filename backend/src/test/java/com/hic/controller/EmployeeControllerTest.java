@@ -7,6 +7,7 @@ import com.hic.dto.PaginatedResponse;
 import com.hic.exception.ResourceNotFoundException;
 import com.hic.model.Employee.EmploymentStatus;
 import com.hic.service.EmployeeService;
+import com.hic.service.FileStorageService;
 import com.hic.util.JwtUtil;
 import com.hic.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ class EmployeeControllerTest {
 
     @MockBean
     private EmployeeService employeeService;
+
+    @MockBean
+    private FileStorageService fileStorageService;
 
     private EmployeeResponseDTO buildResponseDTO() {
         EmployeeResponseDTO dto = new EmployeeResponseDTO();
