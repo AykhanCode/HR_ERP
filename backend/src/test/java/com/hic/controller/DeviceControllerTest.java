@@ -105,4 +105,16 @@ class DeviceControllerTest {
 
         verify(deviceSyncService).getStatus(1L);
     }
+
+    @Test
+    void sync_returns200() throws Exception {
+        DeviceSyncDTO.SyncResultDTO response = new DeviceSyncDTO.SyncResultDTO(true, "Device stream started", 0);
+        when(deviceSyncService.syncDevice(1L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/devices/1/sync"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.success").value(true));
+
+        verify(deviceSyncService).syncDevice(1L);
+    }
 }

@@ -68,4 +68,19 @@ class DeviceSyncServiceTest {
         assertThat(result.getStatus()).isEqualTo("INACTIVE");
         server.verify();
     }
+
+    @Test
+    void syncDevice_forwardsToStartEndpoint() {
+        server.expect(requestTo("http://host.docker.internal:8080/api/devices/9/start"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withSuccess("""
+                        {"id":9,"enabled":true,"running":true}
+                        """, MediaType.APPLICATION_JSON));
+
+        DeviceSyncDTO.SyncResultDTO result = service.syncDevice(9L);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getMessage()).isEqualTo("Device stream started");
+        server.verify();
+    }
 }

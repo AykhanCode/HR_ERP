@@ -78,17 +78,12 @@ public class DeviceSyncService {
     }
 
     public DeviceSyncDTO.SyncResultDTO syncDevice(Long id) {
-        DeviceSyncDTO.DeviceStatusDTO status = getStatus(id);
+        DeviceSyncDTO.DeviceRuntimeDTO runtime = startDevice(id);
         return new DeviceSyncDTO.SyncResultDTO(
-                status.isOnline(),
-                status.isOnline() ? "Device is online" : "Device is offline",
+                runtime.isRunning(),
+                runtime.isRunning() ? "Device stream started" : "Device stream is not running",
                 0
         );
-    }
-
-    public List<DeviceSyncDTO.SyncHistoryDTO> getSyncHistory(Long id) {
-        getDeviceById(id);
-        return Collections.emptyList();
     }
 
     private DeviceSyncDTO.DeviceConfigDTO toConfigDTO(DeviceSyncDTO.IsapiDeviceResponse response) {

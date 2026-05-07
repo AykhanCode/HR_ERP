@@ -69,9 +69,4 @@ public class DeviceController {
     public ResponseEntity<ApiResponse<DeviceSyncDTO.SyncResultDTO>> sync(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(deviceSyncService.syncDevice(id)));
     }
-
-    @GetMapping("/{id}/history")
-    public ResponseEntity<ApiResponse<List<DeviceSyncDTO.SyncHistoryDTO>>> getHistory(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.getSyncHistory(id)));
-    }
 }
