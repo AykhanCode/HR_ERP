@@ -2,161 +2,190 @@ package com.hic.service;
 
 import com.hic.dto.DeviceSyncDTO;
 import com.hic.exception.DeviceSyncException;
-import com.hic.exception.ResourceNotFoundException;
-import com.hic.model.DeviceConfig;
-import com.hic.model.DeviceSyncHistory;
-import com.hic.model.DeviceSyncHistory.SyncStatus;
-import com.hic.repository.DeviceConfigRepository;
-import com.hic.repository.DeviceSyncHistoryRepository;
-import com.hic.util.HikvisionUtil;
-import com.hic.util.EncryptionUtil;
-import com.hic.util.TenantContext;
+import com.hic.exception.UpstreamApiException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeviceSyncService {
 
-    private final DeviceConfigRepository deviceConfigRepository;
-    private final DeviceSyncHistoryRepository syncHistoryRepository;
-    private final HikvisionUtil hikvisionUtil;
-    private final EncryptionUtil encryptionUtil;
+    private static final String ACTIVE_STATUS = "ACTIVE";
+    private static final String INACTIVE_STATUS = "INACTIVE";
 
-    public List<DeviceSyncDTO.DeviceConfigDTO> getAllDevices() {
-        Long tenantId = TenantContext.getTenantId();
-        List<DeviceConfig> devices = tenantId != null
-                ? deviceConfigRepository.findByTenantId(tenantId)
-                : deviceConfigRepository.findAll();
-        return devices.stream().map(this::toConfigDTO).collect(Collectors.toList());
+    private final RestTemplate restTemplate;
+
+    @Value("${isapi.base-url:http://host.docker.internal:8080}")
+    private String isapiBaseUrl;
+
+    public List<DeviceSyncDTO.DeviceConfigDTO> getAllDevices(Boolean enabled) {
+        String url = UriComponentsBuilder
+                .fromHttpUrl(baseDevicesUrl())
+                .queryParamIfPresent("enabled", Optional.ofNullable(enabled))
+                .toUriString();
+        List<DeviceSyncDTO.IsapiDeviceResponse> devices = exchangeForList(url, HttpMethod.GET);
+        return devices.stream().map(this::toConfigDTO).toList();
     }
 
     public DeviceSyncDTO.DeviceConfigDTO getDeviceById(Long id) {
-        return toConfigDTO(deviceConfigRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("DeviceConfig", id)));
+        return toConfigDTO(exchangeForObject(deviceUrl(id), HttpMethod.GET, null, DeviceSyncDTO.IsapiDeviceResponse.class));
     }
 
-    @Transactional
     public DeviceSyncDTO.DeviceConfigDTO createDevice(DeviceSyncDTO.DeviceConfigDTO dto) {
-        DeviceConfig device = new DeviceConfig();
-        mapDtoToDevice(dto, device);
-        device.setStatus("ACTIVE");
-        Long tenantId = TenantContext.getTenantId();
-        if (tenantId != null) {
-            device.setTenantId(tenantId);
-        }
-        return toConfigDTO(deviceConfigRepository.save(device));
+        DeviceSyncDTO.IsapiDeviceUpsertRequest request = toIsapiUpsertRequest(dto);
+        return toConfigDTO(exchangeForObject(baseDevicesUrl(), HttpMethod.POST, request, DeviceSyncDTO.IsapiDeviceResponse.class));
     }
 
-    @Transactional
     public DeviceSyncDTO.DeviceConfigDTO updateDevice(Long id, DeviceSyncDTO.DeviceConfigDTO dto) {
-        DeviceConfig device = deviceConfigRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("DeviceConfig", id));
-        mapDtoToDevice(dto, device);
-        return toConfigDTO(deviceConfigRepository.save(device));
+        DeviceSyncDTO.IsapiDeviceUpsertRequest request = toIsapiUpsertRequest(dto);
+        return toConfigDTO(exchangeForObject(deviceUrl(id), HttpMethod.PUT, request, DeviceSyncDTO.IsapiDeviceResponse.class));
     }
 
-    @Transactional
+    public DeviceSyncDTO.DeviceConfigDTO updateEnabled(Long id, DeviceSyncDTO.DeviceEnabledDTO dto) {
+        DeviceSyncDTO.IsapiDeviceEnabledRequest request = new DeviceSyncDTO.IsapiDeviceEnabledRequest(dto.isEnabled());
+        return toConfigDTO(exchangeForObject(deviceEnabledUrl(id), HttpMethod.PATCH, request, DeviceSyncDTO.IsapiDeviceResponse.class));
+    }
+
     public void deleteDevice(Long id) {
-        if (!deviceConfigRepository.existsById(id)) {
-            throw new ResourceNotFoundException("DeviceConfig", id);
-        }
-        deviceConfigRepository.deleteById(id);
+        exchange(deviceUrl(id), HttpMethod.DELETE, null);
     }
 
-    @Transactional
+    public DeviceSyncDTO.DeviceRuntimeDTO startDevice(Long id) {
+        return toRuntimeDTO(exchangeForObject(deviceStartUrl(id), HttpMethod.POST, null, DeviceSyncDTO.IsapiDeviceRuntimeResponse.class));
+    }
+
+    public DeviceSyncDTO.DeviceRuntimeDTO stopDevice(Long id) {
+        return toRuntimeDTO(exchangeForObject(deviceStopUrl(id), HttpMethod.POST, null, DeviceSyncDTO.IsapiDeviceRuntimeResponse.class));
+    }
+
+    public DeviceSyncDTO.DeviceStatusDTO getStatus(Long id) {
+        DeviceSyncDTO.IsapiDeviceStatusResponse response = exchangeForObject(deviceStatusUrl(id), HttpMethod.GET, null, DeviceSyncDTO.IsapiDeviceStatusResponse.class);
+        return new DeviceSyncDTO.DeviceStatusDTO(response.getId(), response.isOnline(), response.getStatusCode(), response.getResponseSnippet());
+    }
+
     public DeviceSyncDTO.SyncResultDTO syncDevice(Long id) {
-        DeviceConfig device = deviceConfigRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("DeviceConfig", id));
-
-        DeviceSyncHistory history = new DeviceSyncHistory();
-        history.setDeviceId(device.getDeviceId());
-        history.setSyncStartTime(LocalDateTime.now());
-
-        try {
-            boolean reachable = hikvisionUtil.testConnection(
-                    device.getDeviceIp(),
-                    device.getDevicePort() != null ? device.getDevicePort() : 80,
-                    device.getUsername(),
-                    encryptionUtil.isEncrypted(device.getPasswordEncrypted())
-                            ? encryptionUtil.decrypt(device.getPasswordEncrypted())
-                            : device.getPasswordEncrypted()
-            );
-
-            if (!reachable) {
-                throw new DeviceSyncException("Device not reachable: " + device.getDeviceIp());
-            }
-
-            history.setSyncEndTime(LocalDateTime.now());
-            history.setRecordsSynced(0);
-            history.setSyncStatus(SyncStatus.SUCCESS);
-            syncHistoryRepository.save(history);
-
-            device.setLastSyncTime(LocalDateTime.now());
-            deviceConfigRepository.save(device);
-
-            return new DeviceSyncDTO.SyncResultDTO(true, "Sync completed successfully", 0);
-        } catch (Exception e) {
-            history.setSyncEndTime(LocalDateTime.now());
-            history.setSyncStatus(SyncStatus.FAILED);
-            history.setErrorMessage(e.getMessage());
-            syncHistoryRepository.save(history);
-            log.error("Sync failed for device {}: {}", device.getDeviceId(), e.getMessage());
-            return new DeviceSyncDTO.SyncResultDTO(false, e.getMessage(), 0);
-        }
+        DeviceSyncDTO.DeviceStatusDTO status = getStatus(id);
+        return new DeviceSyncDTO.SyncResultDTO(
+                status.isOnline(),
+                status.isOnline() ? "Device is online" : "Device is offline",
+                0
+        );
     }
 
     public List<DeviceSyncDTO.SyncHistoryDTO> getSyncHistory(Long id) {
-        DeviceConfig device = deviceConfigRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("DeviceConfig", id));
-        return syncHistoryRepository.findByDeviceIdOrderBySyncStartTimeDesc(device.getDeviceId())
-                .stream().map(this::toHistoryDTO).collect(Collectors.toList());
+        getDeviceById(id);
+        return Collections.emptyList();
     }
 
-    private void mapDtoToDevice(DeviceSyncDTO.DeviceConfigDTO dto, DeviceConfig device) {
-        device.setDeviceId(dto.getDeviceId());
-        device.setDeviceName(dto.getDeviceName());
-        device.setDeviceIp(dto.getDeviceIp());
-        device.setDevicePort(dto.getDevicePort());
-        device.setUsername(dto.getUsername());
-        // Encrypt password only if a non-empty value is provided
-        if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
-            device.setPasswordEncrypted(encryptionUtil.encrypt(dto.getPassword()));
-        }
-        device.setBranchId(dto.getBranchId());
-        if (dto.getStatus() != null) device.setStatus(dto.getStatus());
-    }
-
-    private DeviceSyncDTO.DeviceConfigDTO toConfigDTO(DeviceConfig device) {
+    private DeviceSyncDTO.DeviceConfigDTO toConfigDTO(DeviceSyncDTO.IsapiDeviceResponse response) {
         DeviceSyncDTO.DeviceConfigDTO dto = new DeviceSyncDTO.DeviceConfigDTO();
-        dto.setId(device.getId());
-        dto.setDeviceId(device.getDeviceId());
-        dto.setDeviceName(device.getDeviceName());
-        dto.setDeviceIp(device.getDeviceIp());
-        dto.setDevicePort(device.getDevicePort());
-        dto.setUsername(device.getUsername());
-        dto.setBranchId(device.getBranchId());
-        dto.setStatus(device.getStatus());
-        dto.setLastSyncTime(device.getLastSyncTime());
+        dto.setId(response.getId());
+        dto.setDeviceId(String.valueOf(response.getId()));
+        dto.setDeviceName(response.getName());
+        dto.setDeviceIp(response.getIp());
+        dto.setUsername(response.getUsername());
+        dto.setStatus(response.isEnabled() ? ACTIVE_STATUS : INACTIVE_STATUS);
         return dto;
     }
 
-    private DeviceSyncDTO.SyncHistoryDTO toHistoryDTO(DeviceSyncHistory h) {
-        DeviceSyncDTO.SyncHistoryDTO dto = new DeviceSyncDTO.SyncHistoryDTO();
-        dto.setId(h.getId());
-        dto.setDeviceId(h.getDeviceId());
-        dto.setSyncStartTime(h.getSyncStartTime());
-        dto.setSyncEndTime(h.getSyncEndTime());
-        dto.setRecordsSynced(h.getRecordsSynced());
-        dto.setSyncStatus(h.getSyncStatus() != null ? h.getSyncStatus().name() : null);
-        dto.setErrorMessage(h.getErrorMessage());
+    private DeviceSyncDTO.DeviceRuntimeDTO toRuntimeDTO(DeviceSyncDTO.IsapiDeviceRuntimeResponse response) {
+        DeviceSyncDTO.DeviceRuntimeDTO dto = new DeviceSyncDTO.DeviceRuntimeDTO();
+        dto.setId(response.getId());
+        dto.setEnabled(response.isEnabled());
+        dto.setRunning(response.isRunning());
+        dto.setStatus(response.isRunning() ? ACTIVE_STATUS : INACTIVE_STATUS);
         return dto;
+    }
+
+    private DeviceSyncDTO.IsapiDeviceUpsertRequest toIsapiUpsertRequest(DeviceSyncDTO.DeviceConfigDTO dto) {
+        DeviceSyncDTO.IsapiDeviceUpsertRequest request = new DeviceSyncDTO.IsapiDeviceUpsertRequest();
+        request.setIp(dto.getDeviceIp());
+        request.setUsername(dto.getUsername());
+        request.setPassword(StringUtils.hasText(dto.getPassword()) ? dto.getPassword() : null);
+        request.setName(dto.getDeviceName());
+        request.setEnabled(toEnabled(dto.getStatus()));
+        return request;
+    }
+
+    private Boolean toEnabled(String status) {
+        if (!StringUtils.hasText(status)) {
+            return null;
+        }
+        return ACTIVE_STATUS.equalsIgnoreCase(status);
+    }
+
+    private String baseDevicesUrl() {
+        return trimTrailingSlash(isapiBaseUrl) + "/api/devices";
+    }
+
+    private String deviceUrl(Long id) {
+        return baseDevicesUrl() + "/" + id;
+    }
+
+    private String deviceEnabledUrl(Long id) {
+        return deviceUrl(id) + "/enabled";
+    }
+
+    private String deviceStartUrl(Long id) {
+        return deviceUrl(id) + "/start";
+    }
+
+    private String deviceStopUrl(Long id) {
+        return deviceUrl(id) + "/stop";
+    }
+
+    private String deviceStatusUrl(Long id) {
+        return deviceUrl(id) + "/status";
+    }
+
+    private String trimTrailingSlash(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
+    private void exchange(String url, HttpMethod method, Object body) {
+        exchangeForObject(url, method, body, Void.class);
+    }
+
+    private <T> T exchangeForObject(String url, HttpMethod method, Object body, Class<T> responseType) {
+        try {
+            HttpEntity<?> entity = body == null ? HttpEntity.EMPTY : new HttpEntity<>(body);
+            ResponseEntity<T> response = restTemplate.exchange(url, method, entity, responseType);
+            return response.getBody();
+        } catch (HttpStatusCodeException ex) {
+            throw new UpstreamApiException(ex.getStatusCode(), ex.getResponseBodyAsString());
+        } catch (ResourceAccessException ex) {
+            throw new DeviceSyncException("ISAPI service is unavailable");
+        }
+    }
+
+    private List<DeviceSyncDTO.IsapiDeviceResponse> exchangeForList(String url, HttpMethod method) {
+        try {
+            ResponseEntity<List<DeviceSyncDTO.IsapiDeviceResponse>> response = restTemplate.exchange(
+                    url,
+                    method,
+                    HttpEntity.EMPTY,
+                    new ParameterizedTypeReference<>() {
+                    }
+            );
+            return response.getBody() == null ? Collections.emptyList() : response.getBody();
+        } catch (HttpStatusCodeException ex) {
+            throw new UpstreamApiException(ex.getStatusCode(), ex.getResponseBodyAsString());
+        } catch (ResourceAccessException ex) {
+            throw new DeviceSyncException("ISAPI service is unavailable");
+        }
     }
 }

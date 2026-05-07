@@ -45,4 +45,80 @@ public class DeviceSyncDTO {
         private String syncStatus;
         private String errorMessage;
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeviceEnabledDTO {
+        private boolean enabled;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeviceRuntimeDTO {
+        private Long id;
+        private boolean enabled;
+        private boolean running;
+        private String status;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class DeviceStatusDTO {
+        private Long id;
+        private boolean online;
+        private int statusCode;
+        private String responseSnippet;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IsapiDeviceResponse {
+        private Long id;
+        private String ip;
+        private String username;
+        private String name;
+        private boolean enabled;
+        private boolean running;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IsapiDeviceUpsertRequest {
+        private String ip;
+        private String username;
+        private String password;
+        private String name;
+        private Boolean enabled;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IsapiDeviceEnabledRequest {
+        private boolean enabled;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IsapiDeviceRuntimeResponse {
+        private Long id;
+        private boolean enabled;
+        private boolean running;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IsapiDeviceStatusResponse {
+        private Long id;
+        private boolean online;
+        private int statusCode;
+        private String responseSnippet;
+    }
 }

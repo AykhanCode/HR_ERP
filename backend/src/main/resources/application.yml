@@ -45,3 +45,6 @@ logging:
   level:
     root: INFO
     com.hic: INFO
+
+isapi:
+  base-url: ${ISAPI_BASE_URL:http://host.docker.internal:8080}
