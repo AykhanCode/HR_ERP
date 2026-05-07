@@ -17,8 +17,9 @@ public class DeviceController {
     private final DeviceSyncService deviceSyncService;
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<DeviceSyncDTO.DeviceConfigDTO>>> getAll() {
-        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.getAllDevices()));
+    public ResponseEntity<ApiResponse<List<DeviceSyncDTO.DeviceConfigDTO>>> getAll(
+            @RequestParam(required = false) Boolean enabled) {
+        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.getAllDevices(enabled)));
     }
 
     @GetMapping("/{id}")
@@ -42,13 +43,30 @@ public class DeviceController {
         return ResponseEntity.ok(ApiResponse.success(null));
     }
 
+    @PatchMapping("/{id}/enabled")
+    public ResponseEntity<ApiResponse<DeviceSyncDTO.DeviceConfigDTO>> updateEnabled(
+            @PathVariable Long id,
+            @RequestBody DeviceSyncDTO.DeviceEnabledDTO dto) {
+        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.updateEnabled(id, dto)));
+    }
+
+    @PostMapping("/{id}/start")
+    public ResponseEntity<ApiResponse<DeviceSyncDTO.DeviceRuntimeDTO>> start(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.startDevice(id)));
+    }
+
+    @PostMapping("/{id}/stop")
+    public ResponseEntity<ApiResponse<DeviceSyncDTO.DeviceRuntimeDTO>> stop(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.stopDevice(id)));
+    }
+
+    @GetMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<DeviceSyncDTO.DeviceStatusDTO>> status(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.getStatus(id)));
+    }
+
     @PostMapping("/{id}/sync")
     public ResponseEntity<ApiResponse<DeviceSyncDTO.SyncResultDTO>> sync(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(deviceSyncService.syncDevice(id)));
-    }
-
-    @GetMapping("/{id}/history")
-    public ResponseEntity<ApiResponse<List<DeviceSyncDTO.SyncHistoryDTO>>> getHistory(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.success(deviceSyncService.getSyncHistory(id)));
     }
 }
