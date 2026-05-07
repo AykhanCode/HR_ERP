@@ -102,7 +102,7 @@ public class DeviceSyncService {
         dto.setId(response.getId());
         dto.setEnabled(response.isEnabled());
         dto.setRunning(response.isRunning());
-        dto.setStatus(response.isRunning() ? ACTIVE_STATUS : INACTIVE_STATUS);
+        dto.setStatus(response.isEnabled() ? ACTIVE_STATUS : INACTIVE_STATUS);
         return dto;
     }
 

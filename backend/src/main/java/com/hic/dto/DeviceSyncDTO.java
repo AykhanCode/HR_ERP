@@ -1,5 +1,6 @@
 package com.hic.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -88,6 +89,7 @@ public class DeviceSyncDTO {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class IsapiDeviceUpsertRequest {
         private String ip;
         private String username;
