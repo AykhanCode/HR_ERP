@@ -155,12 +155,7 @@ public class DeviceSyncService {
 
     private Boolean toEnabled(String status) {
         log.info("ActionLog.toEnabled.start");
-        Boolean result;
-        if (!StringUtils.hasText(status)) {
-            result = null;
-        } else {
-            result = ACTIVE_STATUS.equalsIgnoreCase(status);
-        }
+        Boolean result = StringUtils.hasText(status) ? ACTIVE_STATUS.equalsIgnoreCase(status) : null;
         log.info("ActionLog.toEnabled.end");
         return result;
     }
