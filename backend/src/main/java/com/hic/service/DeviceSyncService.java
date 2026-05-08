@@ -155,11 +155,12 @@ public class DeviceSyncService {
 
     private Boolean toEnabled(String status) {
         log.info("ActionLog.toEnabled.start");
+        Boolean result;
         if (!StringUtils.hasText(status)) {
-            log.info("ActionLog.toEnabled.end");
-            return null;
+            result = null;
+        } else {
+            result = ACTIVE_STATUS.equalsIgnoreCase(status);
         }
-        Boolean result = ACTIVE_STATUS.equalsIgnoreCase(status);
         log.info("ActionLog.toEnabled.end");
         return result;
     }
@@ -224,15 +225,13 @@ public class DeviceSyncService {
         try {
             HttpEntity<?> entity = body == null ? HttpEntity.EMPTY : new HttpEntity<>(body);
             ResponseEntity<T> response = restTemplate.exchange(url, method, entity, responseType);
-            T result = response.getBody();
-            log.info("ActionLog.exchangeForObject.end");
-            return result;
+            return response.getBody();
         } catch (HttpStatusCodeException ex) {
-            log.info("ActionLog.exchangeForObject.end");
             throw new UpstreamApiException(ex.getStatusCode(), ex.getResponseBodyAsString());
         } catch (ResourceAccessException ex) {
-            log.info("ActionLog.exchangeForObject.end");
             throw new DeviceSyncException("ISAPI service is unavailable");
+        } finally {
+            log.info("ActionLog.exchangeForObject.end");
         }
     }
 
@@ -246,15 +245,13 @@ public class DeviceSyncService {
                     new ParameterizedTypeReference<>() {
                     }
             );
-            List<DeviceSyncDTO.IsapiDeviceResponse> result = response.getBody() == null ? Collections.emptyList() : response.getBody();
-            log.info("ActionLog.exchangeForList.end");
-            return result;
+            return response.getBody() == null ? Collections.emptyList() : response.getBody();
         } catch (HttpStatusCodeException ex) {
-            log.info("ActionLog.exchangeForList.end");
             throw new UpstreamApiException(ex.getStatusCode(), ex.getResponseBodyAsString());
         } catch (ResourceAccessException ex) {
-            log.info("ActionLog.exchangeForList.end");
             throw new DeviceSyncException("ISAPI service is unavailable");
+        } finally {
+            log.info("ActionLog.exchangeForList.end");
         }
     }
 }
