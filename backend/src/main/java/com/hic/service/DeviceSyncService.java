@@ -31,7 +31,7 @@ public class DeviceSyncService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${isapi.base-url:http://host.docker.internal:8080}")
+    @Value("${isapi.base-url}")
     private String isapiBaseUrl;
 
     public List<DeviceSyncDTO.DeviceConfigDTO> getAllDevices(Boolean enabled) {
@@ -40,6 +40,7 @@ public class DeviceSyncService {
                 .fromHttpUrl(baseDevicesUrl())
                 .queryParamIfPresent("enabled", Optional.ofNullable(enabled))
                 .toUriString();
+        log.info("request url: {}", url);
         List<DeviceSyncDTO.IsapiDeviceResponse> devices = exchangeForList(url, HttpMethod.GET);
         List<DeviceSyncDTO.DeviceConfigDTO> result = devices.stream().map(this::toConfigDTO).toList();
         log.info("ActionLog.getAllDevices.end");
@@ -163,6 +164,7 @@ public class DeviceSyncService {
     private String baseDevicesUrl() {
         log.info("ActionLog.baseDevicesUrl.start");
         String result = trimTrailingSlash(isapiBaseUrl) + "/api/devices";
+        log.info(result);
         log.info("ActionLog.baseDevicesUrl.end");
         return result;
     }
