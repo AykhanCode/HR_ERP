@@ -97,13 +97,13 @@ class DeviceControllerTest {
 
     @Test
     void sync_returns200() throws Exception {
-        when(isapiProxyService.forward(eq(HttpMethod.POST), eq("/api/devices/1/start"), any(HttpServletRequest.class), isNull()))
+        when(isapiProxyService.forward(eq(HttpMethod.POST), eq("/api/devices/1/sync"), any(HttpServletRequest.class), isNull()))
                 .thenReturn(ResponseEntity.ok("{\"running\":true}"));
 
         mockMvc.perform(post("/api/devices/1/sync"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.running").value(true));
 
-        verify(isapiProxyService).forward(eq(HttpMethod.POST), eq("/api/devices/1/start"), any(HttpServletRequest.class), isNull());
+        verify(isapiProxyService).forward(eq(HttpMethod.POST), eq("/api/devices/1/sync"), any(HttpServletRequest.class), isNull());
     }
 }

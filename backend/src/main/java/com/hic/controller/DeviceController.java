@@ -65,6 +65,6 @@ public class DeviceController {
 
     @PostMapping("/{id}/sync")
     public ResponseEntity<String> sync(@PathVariable Long id, HttpServletRequest request) {
-        return isapiProxyService.forward(HttpMethod.POST, "/api/devices/" + id + "/start", request, null);
+        return isapiProxyService.forward(HttpMethod.POST, "/api/devices/" + id + "/sync", request, null);
     }
 }

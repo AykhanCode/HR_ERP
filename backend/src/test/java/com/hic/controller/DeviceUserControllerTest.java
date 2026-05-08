@@ -13,7 +13,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.client.RestTemplate;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -35,9 +34,6 @@ class DeviceUserControllerTest {
 
     @MockBean
     private IsapiProxyService isapiProxyService;
-
-    @MockBean
-    private RestTemplate restTemplate;
 
     @MockBean
     private JwtUtil jwtUtil;
