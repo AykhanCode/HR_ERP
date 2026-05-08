@@ -16,7 +16,11 @@ import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.util.StreamUtils;
 
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.Iterator;
 import java.util.List;
@@ -31,6 +35,10 @@ public class IsapiProxyService {
 
     @Value("${isapi.base-url}")
     private String isapiBaseUrl;
+
+    public ResponseEntity<String> forward(HttpMethod method, String path, HttpServletRequest request) {
+        return forward(method, path, request, readRawBody(request));
+    }
 
     public ResponseEntity<String> forward(HttpMethod method, String path, HttpServletRequest request, String body) {
         String targetUrl = buildTargetUrl(path, request);
@@ -141,6 +149,17 @@ public class IsapiProxyService {
             };
         } catch (Exception ex) {
             throw new DeviceSyncException("Failed to read multipart file");
+        }
+    }
+
+    private String readRawBody(HttpServletRequest request) {
+        try {
+            Charset charset = request.getCharacterEncoding() != null
+                    ? Charset.forName(request.getCharacterEncoding())
+                    : StandardCharsets.UTF_8;
+            return StreamUtils.copyToString(request.getInputStream(), charset);
+        } catch (IOException ex) {
+            throw new DeviceSyncException("Failed to read request body");
         }
     }
 }

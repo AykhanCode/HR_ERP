@@ -18,9 +18,8 @@ public class DeviceUserController {
 
     @PostMapping
     public ResponseEntity<String> createUser(@PathVariable Long deviceId,
-                                             @RequestBody(required = false) String body,
                                              HttpServletRequest request) {
-        return isapiProxyService.forward(HttpMethod.POST, "/api/devices/" + deviceId + "/users", request, body);
+        return isapiProxyService.forward(HttpMethod.POST, "/api/devices/" + deviceId + "/users", request);
     }
 
     @GetMapping
@@ -38,9 +37,8 @@ public class DeviceUserController {
     @PutMapping("/{userId}")
     public ResponseEntity<String> updateUser(@PathVariable Long deviceId,
                                              @PathVariable Long userId,
-                                             @RequestBody(required = false) String body,
                                              HttpServletRequest request) {
-        return isapiProxyService.forward(HttpMethod.PUT, "/api/devices/" + deviceId + "/users/" + userId, request, body);
+        return isapiProxyService.forward(HttpMethod.PUT, "/api/devices/" + deviceId + "/users/" + userId, request);
     }
 
     @DeleteMapping("/{userId}")

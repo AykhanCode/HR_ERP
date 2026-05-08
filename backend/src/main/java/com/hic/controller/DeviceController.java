@@ -24,15 +24,14 @@ public class DeviceController {
     }
 
     @PostMapping
-    public ResponseEntity<String> create(@RequestBody(required = false) String body, HttpServletRequest request) {
-        return isapiProxyService.forward(HttpMethod.POST, "/api/devices", request, body);
+    public ResponseEntity<String> create(HttpServletRequest request) {
+        return isapiProxyService.forward(HttpMethod.POST, "/api/devices", request);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<String> update(@PathVariable Long id,
-                                         @RequestBody(required = false) String body,
                                          HttpServletRequest request) {
-        return isapiProxyService.forward(HttpMethod.PUT, "/api/devices/" + id, request, body);
+        return isapiProxyService.forward(HttpMethod.PUT, "/api/devices/" + id, request);
     }
 
     @DeleteMapping("/{id}")
@@ -43,9 +42,8 @@ public class DeviceController {
     @PatchMapping("/{id}/enabled")
     public ResponseEntity<String> updateEnabled(
             @PathVariable Long id,
-            @RequestBody(required = false) String body,
             HttpServletRequest request) {
-        return isapiProxyService.forward(HttpMethod.PATCH, "/api/devices/" + id + "/enabled", request, body);
+        return isapiProxyService.forward(HttpMethod.PATCH, "/api/devices/" + id + "/enabled", request);
     }
 
     @PostMapping("/{id}/start")

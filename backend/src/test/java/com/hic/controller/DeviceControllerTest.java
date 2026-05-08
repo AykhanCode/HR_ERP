@@ -23,6 +23,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -59,7 +60,7 @@ class DeviceControllerTest {
 
     @Test
     void patchEnabled_returns200() throws Exception {
-        when(isapiProxyService.forward(eq(HttpMethod.PATCH), eq("/api/devices/1/enabled"), any(HttpServletRequest.class), eq("{\"enabled\":true}")))
+        when(isapiProxyService.forward(eq(HttpMethod.PATCH), eq("/api/devices/1/enabled"), any(HttpServletRequest.class)))
                 .thenReturn(ResponseEntity.ok("{\"enabled\":true}"));
 
         mockMvc.perform(patch("/api/devices/1/enabled")
@@ -68,7 +69,35 @@ class DeviceControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().json("{\"enabled\":true}"));
 
-        verify(isapiProxyService).forward(eq(HttpMethod.PATCH), eq("/api/devices/1/enabled"), any(HttpServletRequest.class), eq("{\"enabled\":true}"));
+        verify(isapiProxyService).forward(eq(HttpMethod.PATCH), eq("/api/devices/1/enabled"), any(HttpServletRequest.class));
+    }
+
+    @Test
+    void create_returns200() throws Exception {
+        when(isapiProxyService.forward(eq(HttpMethod.POST), eq("/api/devices"), any(HttpServletRequest.class)))
+                .thenReturn(ResponseEntity.ok("{\"id\":1}"));
+
+        mockMvc.perform(post("/api/devices")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ip\":\"10.10.10.10\",\"enabled\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"id\":1}"));
+
+        verify(isapiProxyService).forward(eq(HttpMethod.POST), eq("/api/devices"), any(HttpServletRequest.class));
+    }
+
+    @Test
+    void update_returns200() throws Exception {
+        when(isapiProxyService.forward(eq(HttpMethod.PUT), eq("/api/devices/1"), any(HttpServletRequest.class)))
+                .thenReturn(ResponseEntity.ok("{\"id\":1,\"enabled\":false}"));
+
+        mockMvc.perform(put("/api/devices/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabled\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("{\"id\":1,\"enabled\":false}"));
+
+        verify(isapiProxyService).forward(eq(HttpMethod.PUT), eq("/api/devices/1"), any(HttpServletRequest.class));
     }
 
     @Test

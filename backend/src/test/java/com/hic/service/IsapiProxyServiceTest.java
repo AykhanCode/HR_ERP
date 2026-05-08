@@ -10,6 +10,8 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
@@ -57,6 +59,26 @@ class IsapiProxyServiceTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(400);
         assertThat(response.getBody()).isEqualTo("{\"error\":\"invalid\"}");
+        server.verify();
+    }
+
+    @Test
+    void forward_post_readsRawBodyAndForwardsAsIs() {
+        server.expect(requestTo("http://host.docker.internal:8080/api/devices"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Content-Type", "application/json"))
+                .andExpect(content().string("{\"ip\":\"10.0.0.5\",\"enabled\":true}"))
+                .andRespond(withSuccess("{\"ok\":true}", MediaType.APPLICATION_JSON));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setMethod("POST");
+        request.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        request.setContent("{\"ip\":\"10.0.0.5\",\"enabled\":true}".getBytes());
+
+        var response = service.forward(HttpMethod.POST, "/api/devices", request);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getBody()).isEqualTo("{\"ok\":true}");
         server.verify();
     }
 }
