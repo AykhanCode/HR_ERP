@@ -17,7 +17,6 @@ export default function AccessLogsPage() {
   const [fetched, setFetched] = useState(false)
 
   const fetchLogs = useCallback(async () => {
-    if (!startDate || !endDate) return
     setLoading(true)
     setError(null)
     try {
@@ -34,15 +33,22 @@ export default function AccessLogsPage() {
     } finally {
       setLoading(false)
     }
-  }, [startDate, endDate, search, deviceIdFilter])
+  }, [search, deviceIdFilter])
 
   const filteredLogs = logs.filter((log) => {
     if (!search) return true
     const s = search.toLowerCase()
-    return (
+    const matchesSearch = (
       String(log.employeeNo ?? '').toLowerCase().includes(s) ||
       String(log.deviceId ?? '').toLowerCase().includes(s)
     )
+    if (!matchesSearch) return false
+
+    if (!log.punchTime) return true
+    const punchDate = new Date(log.punchTime)
+    const start = new Date(`${startDate}T00:00:00`)
+    const end = new Date(`${endDate}T23:59:59`)
+    return punchDate >= start && punchDate <= end
   })
 
   const uniqueEmployees = new Set(filteredLogs.map(l => l.employeeNo).filter(Boolean)).size
@@ -136,7 +142,7 @@ export default function AccessLogsPage() {
               </div>
               <div className="bg-white rounded-xl p-4 shadow-sm">
                 <p className="text-xs text-gray-400">Unique Devices</p>
-                <p className="text-xl font-bold mt-1 text-red-500">{uniqueDevices}</p>
+                <p className="text-xl font-bold mt-1 text-gray-900">{uniqueDevices}</p>
               </div>
             </div>
 
@@ -145,25 +151,18 @@ export default function AccessLogsPage() {
                 No access logs found for the selected criteria.
               </div>
             ) : (
-                <div className="space-y-3">
+              <div className="space-y-3">
                 {filteredLogs.map((log) => {
-                  const accessGranted = true
                   return (
                     <div key={log.id} className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-5">
                       {/* Status indicator */}
                       <div
                         className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: accessGranted ? '#d1fae5' : '#fee2e2' }}
+                        style={{ background: '#d1fae5' }}
                       >
-                        {accessGranted ? (
-                          <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        )}
+                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       </div>
 
                       {/* Info */}
@@ -193,11 +192,9 @@ export default function AccessLogsPage() {
                       {/* Status badge */}
                       <span
                         className="px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0"
-                        style={accessGranted
-                          ? { background: '#d1fae5', color: '#065f46' }
-                          : { background: '#fee2e2', color: '#991b1b' }}
+                        style={{ background: '#d1fae5', color: '#065f46' }}
                       >
-                        {accessGranted ? 'Recorded' : 'Denied'}
+                        Recorded
                       </span>
                     </div>
                   )
